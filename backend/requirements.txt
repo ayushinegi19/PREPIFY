@@ -1,0 +1,30 @@
+# Backend Requirements for Prepify ML Features
+
+# Core Flask
+Flask==2.3.2
+flask-cors==4.0.0
+flask-bcrypt==1.0.1
+
+# Database
+pymongo==4.5.0
+
+# Authentication
+PyJWT==2.8.0
+
+# PDF Processing
+PyMuPDF==1.23.5
+fitz==0.0.1.dev2
+
+# ML Models and NLP
+transformers==4.33.2
+torch==2.0.1
+sentencepiece==0.1.99
+protobuf==3.20.3
+keybert==0.8.3
+spacy==3.6.1
+scikit-learn==1.3.0
+
+# Utilities
+python-dotenv==1.0.0
+Werkzeug==2.3.7
+pillow==10.0.1

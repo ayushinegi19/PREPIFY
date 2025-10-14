@@ -1,0 +1,43 @@
+# Created by venv; see https://docs.python.org/3/library/venv.html
+
+# ---- Environment & Secrets ----
+.env
+.env.*
+frontend/.env
+
+# ---- Virtual Environments ----
+venv/
+.venv/
+env/
+backend/env/
+ENV/
+pyvenv.cfg
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.db
+instance/
+
+# ---- Flask ----
+uploads/
+model_cache/
+*.log
+
+# ---- Node / React ----
+frontend/node_modules/
+frontend/build/
+frontend/dist/
+
+# ---- IDE / System ----
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# ---- Misc ----
+*.bak
+*.swp
+*.swo
