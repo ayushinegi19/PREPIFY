@@ -1,28 +1,26 @@
 {
-  "name": "frontend",
-  "version": "0.1.0",
+  "name": "prepify-frontend",
+  "version": "1.0.0",
+  "description": "AI-Powered Study Companion - Frontend",
   "private": true,
   "dependencies": {
-    "@testing-library/dom": "^10.4.0",
-    "@testing-library/jest-dom": "^6.6.3",
-    "@testing-library/react": "^16.3.0",
+    "@testing-library/jest-dom": "^5.17.0",
+    "@testing-library/react": "^13.4.0",
     "@testing-library/user-event": "^13.5.0",
-    "axios": "^1.11.0",
-    "framer-motion": "^12.23.9",
-    "lucide-react": "^0.525.0",
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0",
-    "react-dropzone": "^14.3.8",
-    "react-router-dom": "^7.7.1",
+    "axios": "^1.6.2",
+    "lucide-react": "^0.263.1",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
     "react-scripts": "5.0.1",
-    "recharts": "^3.1.0",
     "web-vitals": "^2.1.4"
   },
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "lint": "eslint src/",
+    "format": "prettier --write src/"
   },
   "eslintConfig": {
     "extends": [
@@ -42,5 +40,35 @@
       "last 1 safari version"
     ]
   },
-  "proxy": "http://localhost:5000"
+  "devDependencies": {
+    "eslint": "^8.55.0",
+    "prettier": "^3.1.1"
+  },
+  "proxy": "http://localhost:5000",
+  "homepage": ".",
+  "engines": {
+    "node": ">=16.0.0",
+    "npm": ">=8.0.0"
+  },
+  "keywords": [
+    "education",
+    "ai",
+    "study",
+    "notes",
+    "quiz",
+    "summarization",
+    "mind-map",
+    "flashcards",
+    "student",
+    "learning"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/prepify.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yourusername/prepify/issues"
+  }
 }
