@@ -1,0 +1,40 @@
+# Core Flask Dependencies
+Flask==2.3.3
+flask-cors==4.0.0
+flask-bcrypt==1.0.1
+python-dotenv==1.0.0
+Werkzeug==2.3.7
+
+# Database
+pymongo==4.5.0
+
+# Authentication
+PyJWT==2.8.0
+
+# File Processing
+PyMuPDF==1.23.3          # PDF text extraction
+Pillow==10.0.0           # Image processing
+opencv-python==4.8.0.76  # Image preprocessing (denoising, thresholding)
+pytesseract==0.3.10      # Tesseract OCR wrapper
+numpy==1.24.3            # Array operations for OpenCV
+
+# Google Gemini API
+google-generativeai==0.3.1
+
+# NLP Models - spaCy
+spacy==3.6.1
+# Download separately: 
+# python -m spacy download en_core_web_sm
+# python -m spacy download en_core_web_md
+
+# Transformers for Quiz Generation
+transformers==4.33.0
+torch==2.0.1
+sentencepiece==0.1.99
+
+# KeyBERT for Mind Maps
+keybert==0.7.0
+sentence-transformers==2.2.2
+
+# Additional utilities
+regex==2023.8.8
