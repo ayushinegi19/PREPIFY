@@ -1,0 +1,14 @@
+{
+  "name": "prepify-fullstack",
+  "version": "1.0.0",
+  "description": "Prepify - AI-Powered Study Platform",
+  "scripts": {
+    "frontend": "cd frontend && npm start",
+    "backend": "cd backend && start.bat",
+    "dev": "concurrently --kill-others --names \"🔧BACKEND,⚛️FRONTEND\" --prefix-colors \"yellow.bold,cyan.bold\" \"npm run backend\" \"npm run frontend\"",
+    "start": "npm run dev"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}

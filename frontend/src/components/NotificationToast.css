@@ -1,0 +1,197 @@
+/* components/NotificationToast.css - NEW FILE */
+
+.notification-toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 9999;
+  animation: slideInRight 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+.toast-container {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  border: 1px solid #e2e8f0;
+  overflow: hidden;
+  min-width: 360px;
+  max-width: 400px;
+}
+
+.toast-progress-bar {
+  height: 4px;
+  background: #e2e8f0;
+  overflow: hidden;
+}
+
+.toast-progress-fill {
+  height: 100%;
+  transition: width 0.1s linear;
+}
+
+.toast-progress-fill.toast-blue {
+  background: linear-gradient(90deg, #3b82f6, #60a5fa);
+}
+
+.toast-progress-fill.toast-green {
+  background: linear-gradient(90deg, #10b981, #34d399);
+}
+
+.toast-progress-fill.toast-red {
+  background: linear-gradient(90deg, #ef4444, #f87171);
+}
+
+.toast-content {
+  padding: 16px;
+}
+
+.toast-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.toast-icon {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+}
+
+.toast-icon.toast-blue {
+  background: linear-gradient(135deg, #3b82f6, #60a5fa);
+}
+
+.toast-icon.toast-green {
+  background: linear-gradient(135deg, #10b981, #34d399);
+}
+
+.toast-icon.toast-red {
+  background: linear-gradient(135deg, #ef4444, #f87171);
+}
+
+.toast-spinner {
+  animation: spin 1s linear infinite;
+}
+
+.toast-message {
+  flex: 1;
+  min-width: 0;
+}
+
+.toast-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0 0 4px 0;
+  line-height: 1.4;
+}
+
+.toast-subtitle {
+  font-size: 12px;
+  color: #64748b;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.toast-close-btn {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.toast-close-btn:hover {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.toast-view-btn {
+  width: 100%;
+  margin-top: 12px;
+  padding: 10px 16px;
+  background: linear-gradient(135deg, #8b5cf6, #a855f7);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+}
+
+.toast-view-btn:hover {
+  background: linear-gradient(135deg, #7c3aed, #9333ea);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+}
+
+/* Animations */
+@keyframes slideInRight {
+  from {
+    transform: translateX(400px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Multiple toasts */
+.notification-toast + .notification-toast {
+  margin-bottom: 12px;
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+  .notification-toast {
+    bottom: 16px;
+    right: 16px;
+    left: 16px;
+  }
+
+  .toast-container {
+    min-width: auto;
+    max-width: none;
+  }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .notification-toast {
+    animation: none;
+  }
+  
+  .toast-spinner {
+    animation: none;
+  }
+  
+  .toast-progress-fill {
+    transition: none;
+  }
+}
