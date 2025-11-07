@@ -17,7 +17,7 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
 
 # MongoDB Atlas URI (cloud database)
 MONGO_URI = os.environ.get('MONGO_URI', 
-    'mongodb+srv://AyushiNegi:uIIHkWXwZfZn6pMs@cluster0.ciaq9nk.mongodb.net/?retryWrites=true&w=majority')
+    'your-mongodb-uri')
 
 # ✅ GEMINI API KEY (CRITICAL FOR AI ENHANCEMENTS)
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', None)
