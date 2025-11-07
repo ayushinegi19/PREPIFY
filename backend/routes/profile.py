@@ -1,8 +1,9 @@
-# routes/profile.py
+# routes/profile.py - COMPLETE FIXED VERSION
 from flask import Blueprint, request, jsonify
 from flask_bcrypt import Bcrypt
 from config import db
 from routes.auth import token_required
+from bson import ObjectId
 import logging
 
 logger = logging.getLogger(__name__)
@@ -41,9 +42,13 @@ def update_profile(current_user):
         if not update_data:
             return jsonify({'error': 'No valid fields to update'}), 400
         
+        # Convert string _id back to ObjectId for MongoDB query
+        from bson import ObjectId
+        user_object_id = ObjectId(current_user['_id'])
+        
         # Update user in database
         result = db.users.update_one(
-            {'_id': current_user['_id']},
+            {'_id': user_object_id},
             {'$set': update_data}
         )
         
@@ -51,7 +56,7 @@ def update_profile(current_user):
             return jsonify({'error': 'No changes made'}), 400
         
         # Get updated user
-        updated_user = db.users.find_one({'_id': current_user['_id']})
+        updated_user = db.users.find_one({'_id': user_object_id})
         updated_user['_id'] = str(updated_user['_id'])
         if 'password' in updated_user:
             del updated_user['password']
@@ -64,7 +69,9 @@ def update_profile(current_user):
         
     except Exception as e:
         logger.error(f"Error updating profile: {str(e)}")
-        return jsonify({'error': 'Failed to update profile'}), 500
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Failed to update profile: {str(e)}'}), 500
 
 @profile_bp.route('/change-password', methods=['PUT'])
 @token_required
@@ -79,8 +86,12 @@ def change_password(current_user):
         if not current_password or not new_password:
             return jsonify({'error': 'Both current and new passwords are required'}), 400
         
+        # Convert string _id back to ObjectId
+        from bson import ObjectId
+        user_object_id = ObjectId(current_user['_id'])
+        
         # Get user with password
-        user = db.users.find_one({'_id': current_user['_id']})
+        user = db.users.find_one({'_id': user_object_id})
         
         # Verify current password
         if not bcrypt.check_password_hash(user['password'], current_password):
@@ -91,7 +102,7 @@ def change_password(current_user):
         
         # Update password
         db.users.update_one(
-            {'_id': current_user['_id']},
+            {'_id': user_object_id},
             {'$set': {'password': hashed_password}}
         )
         
@@ -102,4 +113,6 @@ def change_password(current_user):
         
     except Exception as e:
         logger.error(f"Error changing password: {str(e)}")
-        return jsonify({'error': 'Failed to change password'}), 500
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Failed to change password: {str(e)}'}), 500

@@ -1,45 +1,38 @@
-# Core Web Framework
-Flask==3.0.0
-Flask-Bcrypt==1.0.1
-Flask-CORS==4.0.0
-
-# Database
-pymongo==4.6.1
-
-# Authentication & Security
-PyJWT==2.8.0
+# Core Flask Dependencies
+Flask==2.3.3
+flask-cors==4.0.0
+flask-bcrypt==1.0.1
 python-dotenv==1.0.0
 
-# PDF Processing
-PyMuPDF==1.23.8
-fitz==0.0.1.dev2
+# Database
+pymongo==4.5.0
 
-# Image Processing & OCR
-Pillow==10.1.0
-pytesseract==0.3.10
-opencv-python-headless==4.8.1.78
-easyocr==1.7.1
+# Authentication
+PyJWT==2.8.0
 
-# AI & NLP - HuggingFace Transformers
-transformers==4.36.2
-torch==2.1.2
+# File Processing
+PyMuPDF==1.23.3  # PDF processing
+Pillow==10.0.0   # Image processing
+opencv-python==4.8.0.76  # Image preprocessing
+pytesseract==0.3.10  # OCR
+
+# NLP and ML Models
+spacy==3.6.1
+en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.6.0/en_core_web_sm-3.6.0-py3-none-any.whl
+en-core-web-md @ https://github.com/explosion/spacy-models/releases/download/en_core_web_md-3.6.0/en_core_web_md-3.6.0-py3-none-any.whl
+
+# Transformers for Quiz Generation
+transformers==4.33.0
+torch==2.0.1
 sentencepiece==0.1.99
 
-# AI & NLP - spaCy
-spacy==3.7.2
-
-# AI & NLP - Additional
-keybert==0.8.4
+# KeyBERT for Mind Maps
+keybert==0.7.0
 sentence-transformers==2.2.2
 
-# Scientific Computing
-numpy==1.24.3
-scipy==1.11.4
+# Gemini AI (Minimal Usage)
+google-generativeai==0.3.1
 
 # Utilities
-requests==2.31.0
-urllib3==2.1.0
-certifi==2023.11.17
-
-# Development & Testing (Optional)
-werkzeug==3.0.1
+Werkzeug==2.3.7
+numpy==1.24.3

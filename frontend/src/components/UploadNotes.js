@@ -1,8 +1,9 @@
+// UploadNotes.js - COMPLETE FIXED - PERSISTENT FILE SELECTION
 import React, { useState } from 'react';
-import { Upload, CheckCircle, FileText, Target, GitBranch, Loader2, BarChart3 } from 'lucide-react';
+import { Upload, CheckCircle, Loader2 } from 'lucide-react';
 import './UploadNotes.css';
 
-const UploadNotes = ({ onSuccess, onProcessingModalOpen }) => {
+const UploadNotes = ({ onActionComplete }) => {
   const [file, setFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState(false);
@@ -16,6 +17,7 @@ const UploadNotes = ({ onSuccess, onProcessingModalOpen }) => {
       setFile(selectedFile);
       setUploadSuccess(false);
       setError(null);
+      setUploadedDocument(null);
     }
   };
 
@@ -44,10 +46,8 @@ const UploadNotes = ({ onSuccess, onProcessingModalOpen }) => {
       const data = await response.json();
 
       if (response.ok) {
-        console.log('Upload successful:', data);
         setUploadSuccess(true);
         setUploadedDocument(data);
-        if (onSuccess) onSuccess();
       } else {
         setError(data.error || 'Upload failed');
       }
@@ -60,25 +60,27 @@ const UploadNotes = ({ onSuccess, onProcessingModalOpen }) => {
   };
 
   const handleAction = async (actionId) => {
-    // ✅ FIX: Use the correct document_id from uploadedDocument
     if (!uploadedDocument || !uploadedDocument.document_id) {
       alert('No document uploaded yet!');
       return;
     }
 
     const documentId = uploadedDocument.document_id;
-    console.log(`Starting action: ${actionId} on document: ${documentId}`);
     
-    setActionLoading({ [actionId]: true });
+    setActionLoading({ ...actionLoading, [actionId]: true });
+    
+    // Show processing toast
+    if (onActionComplete) {
+      onActionComplete({
+        type: actionId === 'summarize' ? 'summary' : 
+              actionId === 'create_quiz' ? 'quiz' :
+              actionId === 'create_mindmap' ? 'mindmap' : 'flowchart',
+        status: 'processing'
+      });
+    }
     
     try {
       const token = localStorage.getItem('token');
-      
-      if (!token) {
-        throw new Error('No authentication token found. Please log in again.');
-      }
-      
-      console.log(`Calling API: /api/uploads/action/${documentId}/${actionId}`);
       
       const res = await fetch(`/api/uploads/action/${documentId}/${actionId}`, {
         method: "POST",
@@ -95,29 +97,50 @@ const UploadNotes = ({ onSuccess, onProcessingModalOpen }) => {
       }
 
       const data = await res.json();
-      console.log('Action result:', data);
       
-      // Map action to friendly names
-      const actionNames = {
-        'summarize': 'Summary',
-        'create_quiz': 'Quiz',
-        'create_mindmap': 'Mind Map',
-        'create_flowchart': 'Flowchart'
-      };
+      // Get content ID based on action type
+      let contentId = null;
+      if (actionId === 'summarize') contentId = data.summary_id;
+      else if (actionId === 'create_quiz') contentId = data.quiz_id;
+      else if (actionId === 'create_mindmap' || actionId === 'create_flowchart') contentId = data.mindmap_id;
       
-      alert(`${actionNames[actionId]} created successfully!`);
+      // Show completed toast
+      if (onActionComplete) {
+        onActionComplete({
+          type: actionId === 'summarize' ? 'summary' : 
+                actionId === 'create_quiz' ? 'quiz' :
+                actionId === 'create_mindmap' ? 'mindmap' : 'flowchart',
+          contentId: contentId,
+          status: 'completed'
+        });
+      }
       
-      // Reset upload state to allow new upload
-      setUploadSuccess(false);
-      setUploadedDocument(null);
-      setFile(null);
+      // Keep file selected for more actions - DON'T RESET
       
     } catch (err) {
       console.error("Action error:", err);
       alert(`Failed to perform action: ${err.message}`);
+      
+      // Show error toast
+      if (onActionComplete) {
+        onActionComplete({
+          type: actionId === 'summarize' ? 'summary' : 
+                actionId === 'create_quiz' ? 'quiz' :
+                actionId === 'create_mindmap' ? 'mindmap' : 'flowchart',
+          status: 'error'
+        });
+      }
     } finally {
-      setActionLoading({});
+      setActionLoading({ ...actionLoading, [actionId]: false });
     }
+  };
+
+  const handleNewUpload = () => {
+    setFile(null);
+    setUploadSuccess(false);
+    setUploadedDocument(null);
+    setError(null);
+    setActionLoading({});
   };
 
   const formatFileSize = (bytes) => {
@@ -132,14 +155,11 @@ const UploadNotes = ({ onSuccess, onProcessingModalOpen }) => {
     if (!file) return '📄';
     const extension = file.name.split('.').pop().toLowerCase();
     switch (extension) {
-      case 'pdf':
-        return '📄';
+      case 'pdf': return '📄';
       case 'jpg':
       case 'jpeg':
-      case 'png':
-        return '🖼️';
-      default:
-        return '📁';
+      case 'png': return '🖼️';
+      default: return '📁';
     }
   };
 
@@ -201,7 +221,7 @@ const UploadNotes = ({ onSuccess, onProcessingModalOpen }) => {
             <CheckCircle className="success-icon" size={32} />
             <div>
               <h4>Upload Successful!</h4>
-              <p>Your file has been uploaded and processed. Choose an action below.</p>
+              <p>Your file has been uploaded and processed. Choose multiple actions below.</p>
             </div>
           </div>
 
@@ -221,7 +241,7 @@ const UploadNotes = ({ onSuccess, onProcessingModalOpen }) => {
 
           <div className="actions-section">
             <h4>What would you like to do?</h4>
-            <p>Select an AI-powered action to process your uploaded document</p>
+            <p>Select any or all AI-powered actions for this document</p>
 
             <div className="actions-grid">
               <button
@@ -308,6 +328,10 @@ const UploadNotes = ({ onSuccess, onProcessingModalOpen }) => {
                 )}
               </button>
             </div>
+
+            <button className="new-upload-btn" onClick={handleNewUpload}>
+              Upload Another File
+            </button>
           </div>
         </div>
       )}

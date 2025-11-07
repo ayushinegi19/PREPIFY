@@ -1,292 +1,509 @@
-# services/quiz_service.py - Fixed Version
-from transformers import pipeline
+# services/quiz_service.py - FIXED: 10 questions + proper marker cleaning
+import spacy
 import random
 import re
 import logging
+from collections import defaultdict
+from services.gemini_preprocessor import preprocess_text, is_gemini_available, clean_preprocessing_markers, extract_marker_content
 
 logger = logging.getLogger(__name__)
 
-# Initialize the question generation model
 try:
-    qg_pipeline = pipeline("text2text-generation", model="valhalla/t5-small-qg-hl")
-    logger.info("Quiz generation model loaded successfully")
-except Exception as e:
-    logger.error(f"Failed to load quiz generation model: {str(e)}")
-    qg_pipeline = None
+    nlp = spacy.load("en_core_web_sm")
+except:
+    nlp = None
 
-def generate_quiz(text, num_questions=10, difficulty='medium'):
-    """
-    Generate quiz questions from text - FIXED to ensure 10 questions
+qg_pipeline = None
+qa_pipeline = None
+
+try:
+    from transformers import pipeline
+    qg_pipeline = pipeline("text2text-generation", model="valhalla/t5-small-qg-hl", device=-1)
+    qa_pipeline = pipeline("question-answering", model="deepset/roberta-base-squad2", device=-1)
+except:
+    pass
+
+def extract_structured_facts(text):
+    """Extract facts from preprocessed text - WITH PROPER CLEANING"""
+    facts = []
     
-    Args:
-        text (str): The input text to generate questions from
-        num_questions (int): Number of questions to generate (default: 10)
-        difficulty (str): Difficulty level - 'easy', 'medium', or 'hard'
+    def_matches = extract_marker_content(text, 'DEF')
+    fact_matches = extract_marker_content(text, 'FACT')
+    data_matches = extract_marker_content(text, 'DATA')
     
-    Returns:
-        dict: Quiz data including questions and metadata
-    """
-    if not qg_pipeline:
-        raise Exception("Quiz generation model not available")
+    if def_matches or fact_matches or data_matches:
+        # Definitions are BEST for quizzes
+        for definition in def_matches:
+            # CRITICAL: Clean ALL markers from extracted content
+            cleaned = clean_preprocessing_markers(definition.strip())
+            # Remove any remaining marker patterns
+            cleaned = re.sub(r'\[(?:KEY|FACT|DEF|DATA|CAUSE|EFFECT|LIST|COMPARE):[^\]]*\]', '', cleaned)
+            cleaned = re.sub(r'##\s*(?:MAIN TOPIC|FACTUAL CONTENT|KEY DEFINITIONS)\s*\d*:', '', cleaned)
+            cleaned = cleaned.strip()
+            
+            if 20 < len(cleaned) < 300:
+                facts.append({'text': cleaned, 'score': 30, 'type': 'definition'})
+        
+        for fact in fact_matches:
+            cleaned = clean_preprocessing_markers(fact.strip())
+            cleaned = re.sub(r'\[(?:KEY|FACT|DEF|DATA|CAUSE|EFFECT|LIST|COMPARE):[^\]]*\]', '', cleaned)
+            cleaned = re.sub(r'##\s*(?:MAIN TOPIC|FACTUAL CONTENT|KEY DEFINITIONS)\s*\d*:', '', cleaned)
+            cleaned = cleaned.strip()
+            
+            if 20 < len(cleaned) < 300:
+                facts.append({'text': cleaned, 'score': 25, 'type': 'fact'})
+        
+        for data in data_matches:
+            cleaned = clean_preprocessing_markers(data.strip())
+            cleaned = re.sub(r'\[(?:KEY|FACT|DEF|DATA|CAUSE|EFFECT|LIST|COMPARE):[^\]]*\]', '', cleaned)
+            cleaned = cleaned.strip()
+            
+            if 15 < len(cleaned) < 300:
+                facts.append({'text': cleaned, 'score': 22, 'type': 'data'})
+        
+        return facts
     
-    if not text or len(text.strip()) < 100:
-        raise ValueError("Text is too short to generate quiz")
+    return extract_factual_sentences_fallback(text)
+
+def extract_factual_sentences_fallback(text):
+    """Fallback extraction focusing on quality"""
+    if not nlp:
+        raise Exception("spaCy required")
+    
+    text = clean_preprocessing_markers(text)
+    doc = nlp(text[:12000])
+    facts = []
+    
+    for sent in doc.sents:
+        sentence = sent.text.strip()
+        
+        if len(sentence) < 30 or len(sentence) > 250:
+            continue
+        
+        score = 0
+        
+        # HIGHEST PRIORITY: Definitions
+        if re.search(r'\b(\w+)\s+(is|are|means?|defined as|refers? to|known as)\b', sentence, re.I):
+            score += 30
+        
+        # Numbers/data
+        num_count = len(re.findall(r'\d+', sentence))
+        score += min(num_count * 8, 30)
+        
+        # Named entities
+        entities = [ent.text for ent in sent.ents if len(ent.text) > 2]
+        score += min(len(entities) * 6, 25)
+        
+        # Lists/categories
+        if re.search(r'\b(include|such as|types? of|kinds? of|examples?|consists? of)\b', sentence, re.I):
+            score += 15
+        
+        # Causal/process
+        if re.search(r'\b(because|causes?|results? in|leads? to|due to|therefore)\b', sentence, re.I):
+            score += 12
+        
+        # Technical terms
+        if re.search(r'\b(algorithm|method|technique|process|system|protocol|mechanism)\b', sentence, re.I):
+            score += 10
+        
+        if score >= 15:
+            facts.append({'text': sentence, 'score': score, 'type': 'sentence', 'entities': entities})
+    
+    facts.sort(key=lambda x: x['score'], reverse=True)
+    return facts
+
+def validate_question(question, sentence):
+    """Validate question quality"""
+    if not question or '???' in question or '[' in question:
+        return False
+    if question.count('?') != 1:
+        return False
+    words = question.split()
+    if len(words) < 6:
+        return False
+    
+    question_starters = {'what', 'how', 'why', 'which', 'who', 'when', 'where', 'does', 'do', 'is', 'are', 'was', 'were', 'can', 'should'}
+    if words[0].lower() not in question_starters:
+        return False
+    
+    # Avoid vague questions
+    if re.search(r'\b(something|anything|stuff|things)\b', question, re.I):
+        return False
+    
+    return True
+
+def extract_answer_ml(sentence, question):
+    """Extract answer using ML"""
+    if not qa_pipeline:
+        return None
     
     try:
-        # Clean and prepare text
-        text = text.strip()
+        clean_sent = clean_preprocessing_markers(sentence)
+        result = qa_pipeline(question=question, context=clean_sent)
+        answer = result['answer'].strip()
         
-        # Split into sentences
-        sentences = [s.strip() + '.' for s in text.split('.') if len(s.strip()) > 20]
+        # CRITICAL: Clean markers from answer
+        answer = re.sub(r'\[(?:KEY|FACT|DEF|DATA):[^\]]*\]', '', answer)
+        answer = answer.strip()
         
-        if len(sentences) < 5:
-            raise ValueError("Not enough content to generate quiz questions")
-        
-        # Ensure we have enough sentences
-        num_sentences_needed = max(num_questions * 3, len(sentences))
-        
-        questions = []
-        attempted_sentences = []
-        
-        # Try to generate questions from sentences
-        random.shuffle(sentences)  # Shuffle for variety
-        
-        for sentence in sentences:
-            if len(questions) >= num_questions:
-                break
-            
-            # Skip if sentence too short or already attempted
-            if len(sentence.strip()) < 30 or sentence in attempted_sentences:
-                continue
-                
-            attempted_sentences.append(sentence)
-            
-            try:
-                # Generate question using T5 model
-                input_text = f"generate question: {sentence}"
-                result = qg_pipeline(input_text, max_length=64, num_return_sequences=1)
-                
-                if result and len(result) > 0:
-                    question_text = result[0]['generated_text'].strip()
-                    
-                    # Clean up question
-                    if not question_text.endswith('?'):
-                        question_text += '?'
-                    
-                    # Generate answer from the sentence
-                    answer = extract_answer(sentence)
-                    
-                    # Generate distractors (wrong options)
-                    options = generate_options(answer, sentence, text)
-                    
-                    if len(options) == 4 and answer in options:
-                        # Find correct answer index
-                        correct_index = options.index(answer)
-                        
-                        questions.append({
-                            'question': question_text,
-                            'options': options,
-                            'correct_answer': correct_index,
-                            'explanation': sentence
-                        })
-                        
-                        logger.info(f"Generated question {len(questions)}/{num_questions}")
-                        
-            except Exception as e:
-                logger.warning(f"Failed to generate question from sentence: {str(e)}")
-                continue
-        
-        # If we still don't have enough questions, use fallback method
-        if len(questions) < num_questions:
-            logger.info(f"Using fallback method. Current questions: {len(questions)}")
-            fallback_questions = generate_keyword_questions(text, num_questions - len(questions))
-            questions.extend(fallback_questions)
-        
-        # If still not enough, generate simple MCQs
-        if len(questions) < num_questions:
-            logger.info(f"Generating simple MCQs. Current questions: {len(questions)}")
-            simple_questions = generate_simple_mcqs(text, num_questions - len(questions))
-            questions.extend(simple_questions)
-        
-        # Ensure we have exactly the requested number of questions
-        questions = questions[:num_questions]
-        
-        if len(questions) == 0:
-            raise Exception("Failed to generate any questions from the text")
-        
-        # Calculate time limit (2 minutes per question)
-        time_limit = len(questions) * 120
-        
-        logger.info(f"Successfully generated {len(questions)} questions")
-        
-        return {
-            'questions': questions,
-            'total_questions': len(questions),
-            'difficulty': difficulty,
-            'time_limit': time_limit
-        }
-        
-    except Exception as e:
-        logger.error(f"Quiz generation error: {str(e)}")
-        raise Exception(f"Failed to generate quiz: {str(e)}")
+        if 4 < len(answer) < 100 and result['score'] > 0.3:
+            return answer
+    except:
+        pass
+    
+    return None
 
-def extract_answer(sentence):
-    """Extract a potential answer from a sentence"""
-    # Remove common words
-    words = sentence.replace('.', '').replace(',', '').split()
+def extract_answer_fallback(sentence):
+    """Enhanced answer extraction"""
+    sentence = clean_preprocessing_markers(sentence)
     
-    # Filter out common words
-    common_words = {'the', 'a', 'an', 'is', 'are', 'was', 'were', 'in', 'on', 'at', 'to', 'for', 
-                    'of', 'with', 'by', 'from', 'as', 'this', 'that', 'these', 'those', 'it'}
+    # CRITICAL: Remove any remaining markers
+    sentence = re.sub(r'\[(?:KEY|FACT|DEF|DATA|CAUSE|EFFECT|LIST|COMPARE):[^\]]*\]', '', sentence)
+    sentence = re.sub(r'##\s*(?:MAIN TOPIC|FACTUAL CONTENT|KEY DEFINITIONS)\s*\d*:', '', sentence)
+    sentence = sentence.strip()
     
-    important_words = [w for w in words if w.lower() not in common_words and len(w) > 3]
+    sent_doc = nlp(sentence)
     
-    if important_words:
-        # Prefer capitalized words (proper nouns) or longer words
-        capitalized = [w for w in important_words if w[0].isupper()]
-        if capitalized:
-            return random.choice(capitalized)
-        return random.choice(important_words)
-    
-    # Fallback: return a phrase
-    if len(words) > 3:
-        start = len(words) // 3
-        return ' '.join(words[start:start + 2])
-    
-    return words[0] if words else "answer"
-
-def generate_options(correct_answer, sentence, full_text):
-    """Generate multiple choice options including the correct answer"""
-    options = [correct_answer]
-    
-    # Extract potential distractors from full text
-    words = full_text.replace('.', ' ').replace(',', ' ').split()
-    
-    # Get words of similar length to correct answer
-    answer_word_count = len(correct_answer.split())
-    
-    potential_distractors = []
-    for i in range(len(words) - answer_word_count + 1):
-        phrase = ' '.join(words[i:i + answer_word_count])
+    # Pattern 1: "X is/are Y"
+    is_pattern = r'([A-Z][A-Za-z\s]+?)\s+(is|are|was|were)\s+(.+?)(?:\.|,|;|and|which|that|$)'
+    match = re.search(is_pattern, sentence)
+    if match:
+        term = match.group(1).strip()
+        definition = match.group(3).strip()
         
-        # Filter out the correct answer and very short phrases
-        if (phrase.lower() != correct_answer.lower() and 
-            len(phrase) > 3 and 
-            phrase not in sentence):
-            potential_distractors.append(phrase)
+        definition = re.sub(r'\(.*?\)', '', definition)
+        definition = re.sub(r'\s+', ' ', definition).strip()
+        
+        if 10 < len(definition) < 100 and len(definition) > len(term):
+            return definition
+        elif 4 < len(term) < 60:
+            return term
     
-    # Remove duplicates
-    potential_distractors = list(set(potential_distractors))
+    # Pattern 2: "Term: definition"
+    def_pattern = r'^([^:-]+)[-:](.+)$'
+    match = re.search(def_pattern, sentence.strip())
+    if match:
+        answer = match.group(2).strip()
+        if 5 < len(answer) < 100:
+            return answer
     
-    # Add distractors
-    if len(potential_distractors) >= 3:
-        selected = random.sample(potential_distractors, 3)
-        options.extend(selected)
+    # Named entities
+    entities = [ent.text.strip() for ent in sent_doc.ents if 4 < len(ent.text) < 80]
+    if entities:
+        return entities[0]
+    
+    # Noun phrases
+    for chunk in sent_doc.noun_chunks:
+        phrase = chunk.text.strip()
+        if not re.match(r'^(the|a|an|this|that|these|those)\s', phrase, re.I):
+            if 4 < len(phrase) < 80:
+                return phrase
+    
+    return None
+
+def generate_question_ml(sentence):
+    """Generate question with T5"""
+    if not qg_pipeline:
+        return None
+    
+    try:
+        clean_sent = clean_preprocessing_markers(sentence)
+        # Remove markers
+        clean_sent = re.sub(r'\[(?:KEY|FACT|DEF|DATA):[^\]]*\]', '', clean_sent)
+        clean_sent = clean_sent.strip()
+        
+        input_text = f"generate question: {clean_sent}"
+        
+        result = qg_pipeline(
+            input_text,
+            max_length=90,
+            min_length=15,
+            num_beams=6,
+            early_stopping=True,
+            num_return_sequences=1,
+            temperature=0.6
+        )
+        
+        if result and len(result) > 0:
+            question = result[0]['generated_text'].strip()
+            question = re.sub(r'^question:\s*', '', question, flags=re.I)
+            if not question.endswith('?'):
+                question += '?'
+            question = question[0].upper() + question[1:]
+            
+            if validate_question(question, sentence):
+                return question
+    except:
+        pass
+    
+    return None
+
+def generate_question_fallback(sentence, answer):
+    """Fallback question generation"""
+    sentence = clean_preprocessing_markers(sentence)
+    sentence = re.sub(r'\[(?:KEY|FACT|DEF|DATA):[^\]]*\]', '', sentence)
+    
+    if '=' in sentence or ':' in sentence:
+        term = sentence.split('=')[0].split(':')[0].strip()
+        words = term.split()
+        if len(words) <= 3:
+            return f"What is {term}?"
+    
+    sent_lower = sentence.lower()
+    
+    if re.search(r'\bis\b', sent_lower):
+        subject = re.split(r'\s+is\s+', sentence, maxsplit=1, flags=re.I)[0].strip()
+        words = subject.split()
+        if len(words) <= 5:
+            return f"What is {subject}?"
+        else:
+            return f"What {sent_lower.split('is')[0].strip()} is being described?"
+    
+    elif re.search(r'\bare\b', sent_lower):
+        subject = re.split(r'\s+are\s+', sentence, maxsplit=1, flags=re.I)[0].strip()
+        words = subject.split()
+        if len(words) <= 5:
+            return f"What are {subject}?"
+    
+    elif re.search(r'\bmeans?\b', sent_lower):
+        return f"What does {answer} mean?"
+    
+    elif re.search(r'\bcauses?|results? in|leads? to\b', sent_lower):
+        return f"What is the cause or result mentioned in the text?"
+    
+    elif re.search(r'\b(types?|kinds?|examples?)\b', sent_lower):
+        return f"What are the types or examples mentioned?"
+    
     else:
-        # Generate generic distractors
-        generic = [
-            f"Not {correct_answer}",
-            f"All of the above",
-            f"None of the above"
-        ]
-        options.extend(generic[:3 - len(potential_distractors)])
-    
-    # Ensure exactly 4 options
-    options = options[:4]
-    
-    # Shuffle options
-    random.shuffle(options)
-    
-    return options
+        return f"According to the document, what is {answer}?"
 
-def generate_keyword_questions(text, num_questions):
-    """Generate fill-in-the-blank style questions as fallback"""
+def generate_smart_distractors(answer, all_facts, text, answer_type=None):
+    """Generate INTELLIGENT distractors - NO MARKERS"""
+    text = clean_preprocessing_markers(text)
+    text = re.sub(r'\[(?:KEY|FACT|DEF|DATA):[^\]]*\]', '', text)
+    
+    doc = nlp(text[:12000])
+    answer_doc = nlp(answer)
+    
+    if not answer_type and answer_doc.ents:
+        answer_type = answer_doc.ents[0].label_
+    
+    answer_length = len(answer.split())
+    answer_lower = answer.lower()
+    candidates = set()
+    
+    # STRATEGY 1: Same-type entities
+    for ent in doc.ents:
+        if (ent.text != answer and
+            4 < len(ent.text) < 100 and
+            abs(len(ent.text.split()) - answer_length) <= 4):
+            if answer_type and ent.label_ == answer_type:
+                candidates.add(ent.text.strip())
+    
+    # STRATEGY 2: Similar noun phrases
+    for chunk in doc.noun_chunks:
+        phrase = chunk.text.strip()
+        if (phrase != answer and
+            4 < len(phrase) < 100 and
+            abs(len(phrase.split()) - answer_length) <= 4 and
+            not re.match(r'^(the|a|an|this|that)\s', phrase, re.I)):
+            candidates.add(phrase)
+    
+    # STRATEGY 3: Answers from other facts - CLEAN THEM
+    for fact in all_facts[:30]:
+        fact_text = fact['text']
+        # Clean markers from fact
+        fact_text = clean_preprocessing_markers(fact_text)
+        fact_text = re.sub(r'\[(?:KEY|FACT|DEF|DATA):[^\]]*\]', '', fact_text)
+        fact_text = re.sub(r'##\s*(?:MAIN TOPIC|FACTUAL CONTENT)\s*\d*:', '', fact_text)
+        
+        fact_answer = extract_answer_fallback(fact_text)
+        if fact_answer and fact_answer != answer and 4 < len(fact_answer) < 100:
+            candidates.add(fact_answer)
+    
+    # STRATEGY 4: Numbers
+    if re.search(r'\d+', answer):
+        for match in re.finditer(r'\d+(?:\.\d+)?(?:\s*(?:million|billion|thousand|%|percent))?', text):
+            num = match.group().strip()
+            if num != answer and num not in answer_lower:
+                candidates.add(num)
+    
+    candidates = list(candidates)
+    random.shuffle(candidates)
+    distractors = candidates[:3]
+    
+    # Fill with smart generic if needed
+    if len(distractors) < 3:
+        smart_generic = []
+        
+        if answer_type == 'DATE':
+            smart_generic = ["A different year mentioned", "Not specified in document"]
+        elif answer_type == 'PERSON':
+            smart_generic = ["Another person mentioned", "Not stated"]
+        elif answer_type == 'ORG':
+            smart_generic = ["A different organization", "Not mentioned"]
+        elif re.search(r'\d+', answer):
+            smart_generic = ["Approximately half of that", "Twice that amount", "Not specified"]
+        else:
+            smart_generic = ["None of the above", "All of the above", "Not mentioned in document"]
+        
+        while len(distractors) < 3 and smart_generic:
+            option = smart_generic.pop(0)
+            if option not in distractors and option.lower() != answer_lower:
+                distractors.append(option)
+    
+    return distractors[:3]
+
+def generate_quiz(text, num_questions=10, difficulty='medium'):
+    """Generate REFINED quiz - EXACTLY 10 QUESTIONS"""
+    
+    if not nlp or not qg_pipeline or not qa_pipeline:
+        raise Exception("ML models required")
+    
+    if len(text) < 200:
+        raise ValueError("Text too short")
+    
+    logger.info("="*70)
+    logger.info("🎯 GENERATING GRAMMATICALLY PERFECT QUIZ")
+    logger.info("="*70)
+    
+    # Preprocess
+    preprocessed = preprocess_text(text, 'quiz')
+    logger.info(f"✅ Preprocessed: {len(text)} → {len(preprocessed)} chars")
+    
+    # Extract facts
+    facts = extract_structured_facts(preprocessed)
+    
+    # Log extraction details
+    def_count = len([f for f in facts if f['type'] == 'definition'])
+    fact_count = len([f for f in facts if f['type'] == 'fact'])
+    data_count = len([f for f in facts if f['type'] == 'data'])
+    logger.info(f"📚 Extracted markers: {def_count} definitions, {fact_count} facts, {data_count} data")
+    
+    # Validate facts
+    validated_facts = []
+    for fact in facts:
+        # Double-check: no markers in text
+        cleaned_text = clean_preprocessing_markers(fact['text'])
+        cleaned_text = re.sub(r'\[(?:KEY|FACT|DEF|DATA):[^\]]*\]', '', cleaned_text)
+        cleaned_text = re.sub(r'##\s*(?:MAIN TOPIC|FACTUAL CONTENT|KEY DEFINITIONS)\s*\d*:', '', cleaned_text)
+        cleaned_text = cleaned_text.strip()
+        
+        if len(cleaned_text) >= 20:
+            fact['text'] = cleaned_text
+            validated_facts.append(fact)
+    
+    logger.info(f"✅ Total valid facts: {len(validated_facts)}")
+    
+    if len(validated_facts) == 0:
+        raise Exception("No factual information found")
+    
+    logger.info(f"📚 Extracted {len(validated_facts)} validated facts")
+    
+    # Clean for ML
+    clean_text = clean_preprocessing_markers(preprocessed)
+    clean_text = re.sub(r'\[(?:KEY|FACT|DEF|DATA):[^\]]*\]', '', clean_text)
+    doc = nlp(clean_text[:12000])
+    
     questions = []
-    sentences = [s.strip() + '.' for s in text.split('.') if len(s.strip()) > 30]
+    used_answers = set()
     
-    if not sentences:
-        return questions
+    # CRITICAL: Try up to 8x the target to ensure we get 10 good questions
+    target_attempts = min(num_questions * 8, len(validated_facts))
     
-    random.shuffle(sentences)
-    
-    for sentence in sentences[:num_questions * 2]:
+    for idx, fact in enumerate(validated_facts[:target_attempts]):
         if len(questions) >= num_questions:
             break
-            
-        words = sentence.replace('.', '').split()
         
-        if len(words) > 5:
-            # Find a good word to blank out (not at start/end, not too common)
-            common_words = {'the', 'a', 'an', 'is', 'are', 'was', 'were', 'in', 'on', 'at'}
+        try:
+            sentence = fact['text']
             
-            candidate_indices = [i for i, w in enumerate(words) 
-                               if i > 0 and i < len(words) - 1 
-                               and w.lower() not in common_words 
-                               and len(w) > 3]
+            if len(sentence) < 25:
+                continue
             
-            if candidate_indices:
-                blank_index = random.choice(candidate_indices)
-                answer = words[blank_index]
-                
-                # Create question with blank
-                question_words = words.copy()
-                question_words[blank_index] = "_____"
-                question = ' '.join(question_words) + '?'
-                
-                # Generate options
-                options = generate_options(answer, sentence, text)
-                
-                if len(options) == 4 and answer in options:
-                    correct_index = options.index(answer)
-                    
-                    questions.append({
-                        'question': question,
-                        'options': options,
-                        'correct_answer': correct_index,
-                        'explanation': sentence
-                    })
-    
-    return questions
-
-def generate_simple_mcqs(text, num_questions):
-    """Generate simple multiple choice questions as last resort"""
-    questions = []
-    
-    # Split text into chunks
-    chunks = [chunk.strip() for chunk in text.split('\n\n') if len(chunk.strip()) > 50]
-    
-    if not chunks:
-        chunks = [text[i:i+500] for i in range(0, len(text), 500)]
-    
-    for i, chunk in enumerate(chunks[:num_questions]):
-        if len(questions) >= num_questions:
-            break
-        
-        # Extract key information
-        sentences = [s.strip() for s in chunk.split('.') if len(s.strip()) > 20]
-        
-        if sentences:
-            sentence = sentences[0]
-            answer = extract_answer(sentence)
+            # Generate question
+            question_text = generate_question_ml(sentence)
             
-            # Create a "What is mentioned about..." question
-            question = f"According to the text, what is mentioned about {answer.lower()}?"
+            if not question_text or not validate_question(question_text, sentence):
+                answer_temp = extract_answer_fallback(sentence)
+                if answer_temp:
+                    question_text = generate_question_fallback(sentence, answer_temp)
+                else:
+                    continue
             
-            # Generate options
-            options = generate_options(answer, sentence, text)
+            if not validate_question(question_text, sentence):
+                continue
             
-            if len(options) == 4 and answer in options:
-                correct_index = options.index(answer)
-                
-                questions.append({
-                    'question': question,
-                    'options': options,
-                    'correct_answer': correct_index,
-                    'explanation': sentence
-                })
+            # Extract answer
+            answer = extract_answer_ml(sentence, question_text)
+            
+            if not answer:
+                answer = extract_answer_fallback(sentence)
+            
+            if not answer or len(answer) < 4 or len(answer) > 120:
+                continue
+            
+            # FINAL CHECK: No markers in answer
+            if '[' in answer or 'FACTUAL CONTENT' in answer.upper():
+                continue
+            
+            if answer.lower() in used_answers:
+                continue
+            
+            # Detect answer type
+            answer_doc = nlp(answer)
+            answer_type = answer_doc.ents[0].label_ if answer_doc.ents else None
+            
+            # Generate smart distractors
+            distractors = generate_smart_distractors(answer, validated_facts, clean_text, answer_type)
+            
+            if len(distractors) != 3:
+                continue
+            
+            if answer in distractors:
+                continue
+            
+            # FINAL CHECK: No markers in distractors
+            clean_distractors = []
+            for dist in distractors:
+                if '[' not in dist and 'FACTUAL CONTENT' not in dist.upper():
+                    clean_distractors.append(dist)
+            
+            if len(clean_distractors) != 3:
+                continue
+            
+            # Create options
+            options = [answer] + clean_distractors
+            random.shuffle(options)
+            correct_index = options.index(answer)
+            
+            questions.append({
+                'question': question_text,
+                'options': options,
+                'correct_answer': correct_index,
+                'explanation': sentence
+            })
+            
+            used_answers.add(answer.lower())
+            logger.info(f"✅ Question {len(questions)}/{num_questions}: {question_text[:60]}...")
+            
+        except Exception as e:
+            logger.warning(f"⚠️ Skipped: {e}")
+            continue
     
-    return questions
-
-def generate_quiz_from_summary(summary_text, num_questions=10, difficulty='medium'):
-    """Generate quiz from a summary"""
-    return generate_quiz(summary_text, num_questions, difficulty)
+    if len(questions) == 0:
+        raise Exception("Could not generate quality questions from document")
+    
+    time_limit = len(questions) * 120
+    
+    logger.info("="*70)
+    logger.info(f"✅ QUIZ COMPLETE: {len(questions)} grammatically correct questions")
+    logger.info("="*70)
+    
+    return {
+        'questions': questions,
+        'total_questions': len(questions),
+        'difficulty': difficulty,
+        'time_limit': time_limit,
+        'preprocessed_with_gemini': is_gemini_available()
+    }

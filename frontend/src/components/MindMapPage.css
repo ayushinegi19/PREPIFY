@@ -1,131 +1,129 @@
-/* MindMapPage.css */
+/* MindMapPage.css - FINAL VIEWPORT & NO-OVERLAP FIX */
 
 .mindmap-page-container {
-  padding: 2rem;
-  max-width: 1400px;
+  /* Make container fill the space, don't set max-width */
+  width: 100%;
   margin: 0 auto;
+  padding: 0;
 }
 
 .mindmap-content {
-  background: white;
-  border-radius: 20px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  background: #f8fafc;
   overflow: hidden;
-}
-
-/* Mind Map Header */
-.mindmap-header {
-  background: linear-gradient(135deg, #10b981 0%, #059669 50%, #047857 100%);
-  padding: 2rem;
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  color: white;
-  position: relative;
-  gap: 1rem;
+  flex-direction: column;
+  /* Adjust this vh value to match your header's height */
+  /* e.g., if header is 70px, use calc(100vh - 70px) */
+  height: calc(100vh - 89px); 
 }
 
-.mindmap-header::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: radial-gradient(circle at top right, rgba(255, 255, 255, 0.1) 0%, transparent 70%);
-  pointer-events: none;
-}
-
-.mindmap-title-section {
-  flex: 1;
-  text-align: center;
-  position: relative;
-  z-index: 1;
-}
-
-.mindmap-title-section h2 {
-  font-size: 1.75rem;
-  font-weight: 700;
-  margin: 0 0 0.5rem 0;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.mindmap-title-section p {
-  margin: 0;
-  opacity: 0.9;
-  font-size: 1rem;
-}
-
+/* Floating Controls - Top Right - HORIZONTAL */
 .mindmap-controls {
+  position: absolute; /* Positioned inside the container */
+  top: 20px;
+  right: 20px;
   display: flex;
-  gap: 0.5rem;
+  flex-direction: row; /* Horizontal layout */
+  gap: 10px;
+  z-index: 1000;
   align-items: center;
-  position: relative;
-  z-index: 1;
 }
 
 .control-btn,
 .download-btn {
-  background: rgba(255, 255, 255, 0.2);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  color: white;
+  background: white;
+  border: 1px solid #e2e8f0;
+  color: #1e293b;
   padding: 10px;
   border-radius: 8px;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 0.5rem;
   cursor: pointer;
   transition: all 0.2s ease;
-  backdrop-filter: blur(10px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .download-btn {
-  padding: 10px 20px;
+  padding: 10px 16px;
   font-weight: 600;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  border: none;
 }
 
-.control-btn:hover,
+.control-btn:hover {
+  background: #f1f5f9;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
 .download-btn:hover {
-  background: rgba(255, 255, 255, 0.3);
-  transform: translateY(-1px);
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
 }
 
-/* Canvas Container */
+/* --- DUPLICATE BACK BUTTON REMOVED --- */
+/* The .back-button rule is now gone */
+
+/* --- THIS IS THE SCROLLING VIEWPORT --- */
 .mindmap-canvas-container {
-  padding: 2rem;
+  flex-grow: 1; /* Take up all remaining vertical space */
+  overflow: auto; /* THIS ADDS SCROLLBARS */
   background: #f8fafc;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: 600px;
-  overflow: auto;
-}
-
-.mindmap-canvas {
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  position: relative;
   cursor: grab;
-  max-width: 100%;
-  height: auto;
+  padding: 0;
+  width: 100%; 
+  height: 100%;
 }
 
-.mindmap-canvas:active {
+.mindmap-canvas-container:active {
   cursor: grabbing;
 }
 
-/* Legend */
+/* --- THIS IS THE DRAWING SURFACE --- */
+.mindmap-canvas {
+  display: block;
+  /* The JS will set the width/height attributes to match the container */
+  /* The pan/zoom is handled by the JS drawing, not CSS */
+}
+
+/* Custom scrollbar */
+.mindmap-canvas-container::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+.mindmap-canvas-container::-webkit-scrollbar-track {
+  background: #e2e8f0;
+}
+
+.mindmap-canvas-container::-webkit-scrollbar-thumb {
+  background: #10b981;
+  border-radius: 6px;
+}
+
+.mindmap-canvas-container::-webkit-scrollbar-thumb:hover {
+  background: #059669;
+}
+
+/* Legend - Bottom */
 .mindmap-legend {
-  padding: 2rem;
+  padding: 1rem 2rem;
   background: white;
   border-top: 1px solid #e2e8f0;
+  z-index: 10;
+  flex-shrink: 0;
 }
 
 .mindmap-legend h4 {
-  font-size: 1.25rem;
+  font-size: 1.1rem;
   font-weight: 700;
   color: #1e293b;
-  margin: 0 0 1rem 0;
+  margin: 0 0 0.75rem 0;
 }
 
 .legend-items {
@@ -152,34 +150,21 @@
   background: #8b5cf6;
 }
 
-.legend-line {
-  width: 40px;
-  height: 3px;
-}
-
-.legend-line.solid {
-  background: #8b5cf6;
-}
-
-.legend-line.dashed {
-  background: linear-gradient(to right, #cbd5e1 50%, transparent 50%);
-  background-size: 10px 3px;
-}
-
 .legend-item span {
   font-size: 0.9rem;
   color: #64748b;
   font-weight: 500;
 }
 
-/* Loading State */
-.loading-state {
+/* Loading/Empty States */
+.loading-state, .no-mindmap {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: 400px;
+  padding: 4rem 2rem;
   text-align: center;
+  gap: 1.5rem;
 }
 
 .spinner {
@@ -189,23 +174,11 @@
   border-top: 3px solid #10b981;
   border-radius: 50%;
   animation: spin 1s linear infinite;
-  margin-bottom: 1rem;
 }
 
 .loading-state p {
   font-size: 1.1rem;
   color: #64748b;
-}
-
-/* No Mind Map State */
-.no-mindmap {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 400px;
-  text-align: center;
-  gap: 1.5rem;
 }
 
 .no-mindmap h3 {
@@ -215,6 +188,7 @@
   margin: 0;
 }
 
+/* This is for the "Go Back" button on the error page */
 .back-btn {
   display: flex;
   align-items: center;
@@ -235,85 +209,33 @@
   box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
 }
 
-.back-button {
-  background: rgba(255, 255, 255, 0.2);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  color: white;
-  padding: 10px 20px;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  backdrop-filter: blur(10px);
-  position: relative;
-  z-index: 1;
-}
-
-.back-button:hover {
-  background: rgba(255, 255, 255, 0.3);
-  transform: translateY(-1px);
-}
-
-/* Animations */
 @keyframes spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
 }
 
 /* Responsive Design */
-@media (max-width: 1024px) {
-  .mindmap-canvas-container {
-    padding: 1.5rem;
-  }
-
-  .mindmap-canvas {
-    width: 100%;
-  }
-}
-
 @media (max-width: 768px) {
-  .mindmap-page-container {
-    padding: 1rem;
+  .mindmap-content {
+    height: calc(100vh - 73px);
   }
-
-  .mindmap-header {
-    flex-direction: column;
-    gap: 1rem;
-    padding: 1.5rem;
-  }
-
-  .mindmap-title-section {
-    order: -1;
-  }
-
-  .mindmap-title-section h2 {
-    font-size: 1.5rem;
-  }
-
-  .back-button {
-    width: 100%;
-    justify-content: center;
-  }
-
+  
   .mindmap-controls {
-    width: 100%;
-    justify-content: center;
+    top: 80px;
+    right: 10px;
   }
 
+  .control-btn,
   .download-btn {
-    flex: 1;
-    justify-content: center;
+    padding: 10px;
   }
-
-  .mindmap-canvas-container {
-    padding: 1rem;
-    min-height: 400px;
+  
+  .download-btn span {
+    display: none; /* Hide "Download" text on mobile */
   }
 
   .mindmap-legend {
-    padding: 1.5rem;
+    padding: 1rem;
   }
 
   .legend-items {
@@ -322,24 +244,26 @@
 }
 
 @media (max-width: 480px) {
-  .mindmap-title-section h2 {
-    font-size: 1.25rem;
-  }
-
   .mindmap-controls {
-    flex-wrap: wrap;
+    top: 70px;
+    right: 5px;
+    gap: 6px;
   }
 
   .control-btn {
-    flex: 1;
-    justify-content: center;
+    padding: 8px;
   }
 
   .download-btn {
-    width: 100%;
+    padding: 8px;
+  }
+  
+  .download-btn span {
+    display: none; /* Hide "Download" text on mobile */
   }
 
   .legend-items {
     flex-direction: column;
+    gap: 0.75rem;
   }
 }
